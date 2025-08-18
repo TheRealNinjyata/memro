@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Memro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      background: #1a1a1a;
+      color: #fff;
+      font-family: 'VT323', monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      overflow: auto;
+    }
+    #game-canvas {
+      max-width: 100%;
+      max-height: 80vh;
+      border: 2px solid #00ffcc;
+      box-shadow: 0 0 20px #00ffcc;
+      background: #000;
+      display: block;
+    }
+    #lobby, #waiting-room, #game-container {
+      text-align: center;
+      width: 90%;
+      max-width: 500px;
+      padding: 20px;
+      display: none;
+    }
+    #game-container {
+      position: relative;
+      min-height: calc(80vh + 90px); /* Canvas (80vh) + header (60px) + button gap (30px) */
+    }
+    #waiting-room {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      height: 50px;
+    }
+    h2 {
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+      margin-bottom: 20px;
+      letter-spacing: 2px;
+      font-size: 32px;
+    }
+    #lobby-buttons {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    #game-name {
+      padding: 10px;
+      font-size: 18px;
+      border: 2px solid #00ffcc;
+      background: #000;
+      color: #fff;
+      box-shadow: 0 0 10px #00ffcc;
+      width: 100%;
+      max-width: 300px;
+      letter-spacing: 1px;
+    }
+    #create-game, #how-to-play {
+      padding: 10px 20px;
+      font-size: 18px;
+      background: #ff00ff;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      box-shadow: 0 0 10px #ff00ff;
+      width: 100%;
+      max-width: 300px;
+      letter-spacing: 1px;
+    }
+    #create-game:hover, #how-to-play:hover { background: #cc00cc; }
+    #open-games {
+      list-style: none;
+      padding: 0;
+      margin-top: 20px;
+    }
+    #open-games li {
+      margin: 10px 0;
+      color: #00ffcc;
+      text-shadow: 0 0 5px #00ffcc;
+      letter-spacing: 1px;
+    }
+    #open-games button {
+      padding: 5px 10px;
+      background: #00ffcc;
+      border: none;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00ffcc;
+      letter-spacing: 1px;
+    }
+    #open-games button:hover { background: #00cc99; }
+    #status {
+      font-size: 36px;
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+      letter-spacing: 1px;
+    }
+    #timer {
+      font-size: 18px;
+      color: #00ffcc;
+      text-shadow: 0 0 5px #00ffcc;
+      letter-spacing: 1px;
+    }
+    #in-game-exit, #waiting-exit {
+      padding: 15px 30px;
+      font-size: 24px;
+      background: #000;
+      border: 2px solid #ff00ff;
+      color: #ff00ff;
+      cursor: pointer;
+      box-shadow: 0 0 10px #ff00ff;
+      text-shadow: 0 0 5px #ff00ff;
+      font-family: 'VT323', monospace;
+      letter-spacing: 1px;
+    }
+    #in-game-exit:hover, #waiting-exit:hover {
+      background: #ff00ff;
+      color: #000;
+      text-shadow: none;
+    }
+    #in-game-exit {
+      position: absolute;
+      bottom: 4vw; /* Dynamic gap for desktop, ~20-40px on typical screens */
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    #waiting-status {
+      color: #00ffcc;
+      text-shadow: 0 0 10px #00ffcc;
+      letter-spacing: 1px;
+    }
+    #game-over {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid #ff00ff;
+      box-shadow: 0 0 20px #ff00ff;
+      text-align: center;
+      z-index: 10;
+    }
+    #game-over h2 {
+      margin: 0;
+      letter-spacing: 1px;
+    }
+    #game-over p {
+      color: #00ffcc;
+      text-shadow: 0 0 5px #00ffcc;
+      margin: 10px 0;
+      letter-spacing: 1px;
+    }
+    #game-over button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #00ffcc;
+      border: none;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00ffcc;
+      margin: 10px;
+      letter-spacing: 1px;
+    }
+    #game-over button:hover { background: #00cc99; }
+    #rematch-waiting {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid #ff00ff;
+      box-shadow: 0 0 20px #ff00ff;
+      text-align: center;
+      z-index: 10;
+    }
+    #rematch-waiting h2 {
+      color: #00ffcc;
+      text-shadow: 0 0 10px #00ffcc;
+      letter-spacing: 1px;
+    }
+    #match-started {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid #00ffcc;
+      box-shadow: 0 0 20px #00ffcc;
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+      font-size: 24px;
+      z-index: 10;
+      letter-spacing: 1px;
+    }
+    #how-to-play-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid #00ffcc;
+      box-shadow: 0 0 20px #00ffcc;
+      text-align: left;
+      z-index: 10;
+      max-width: 500px;
+      color: #00ffcc;
+      text-shadow: 0 0 5px #00ffcc;
+      letter-spacing: 1px;
+      position: relative;
+    }
+    #how-to-play-popup h3 {
+      color: #ff00ff;
+      text-shadow: 0 0 10px #ff00ff;
+      margin: 10px 0;
+      letter-spacing: 1px;
+    }
+    #how-to-play-popup p, #how-to-play-popup li {
+      margin: 10px 0;
+      font-size: 16px;
+      letter-spacing: 1px;
+    }
+    #close-how-to-play {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #ff00ff;
+      font-size: 20px;
+      cursor: pointer;
+      text-shadow: 0 0 5px #ff00ff;
+      letter-spacing: 1px;
+    }
+    #close-how-to-play:hover {
+      color: #cc00cc;
+      text-shadow: 0 0 5px #cc00cc;
+    }
+    #rematch-popup {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0, 0, 0, 0.8);
+      padding: 20px;
+      border: 2px solid #ff00ff;
+      box-shadow: 0 0 20px #ff00ff;
+      text-align: center;
+      z-index: 10;
+    }
+    #rematch-popup h2 {
+      margin: 0;
+      letter-spacing: 1px;
+    }
+    #rematch-popup button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background: #00ffcc;
+      border: none;
+      color: #000;
+      cursor: pointer;
+      box-shadow: 0 0 10px #00ffcc;
+      margin: 10px;
+      letter-spacing: 1px;
+    }
+    #rematch-popup button:hover { background: #00cc99; }
+    @media (max-width: 500px) {
+      h2 { font-size: 24px; }
+      #game-name, #create-game, #how-to-play, #open-games button { font-size: 14px; padding: 8px; }
+      #status { font-size: 28px; }
+      #timer { font-size: 14px; }
+      #match-started { font-size: 20px; }
+      #how-to-play-popup { font-size: 14px; padding: 15px; }
+      #game-canvas { max-height: 70vh; }
+      #in-game-exit, #waiting-exit { font-size: 20px; padding: 10px 20px; }
+      #in-game-exit { bottom: 10px; } /* Mobile: 10px gap */
+      #game-container { min-height: calc(70vh + 80px); } /* Adjusted for mobile */
+    }
+    @media (min-width: 501px) {
+      #in-game-exit { bottom: 4vw; } /* Ensure dynamic gap for desktop */
+    }
+  </style>
+</head>
+<body>
+  <div id="lobby">
+    <h2>Memro Lobby</h2>
+    <div id="lobby-buttons">
+      <button id="how-to-play">How To Play</button>
+      <input id="game-name" type="text" placeholder="Enter game name">
+      <button id="create-game">Create Game</button>
+    </div>
+    <h2>Open Games</h2>
+    <ul id="open-games"></ul>
+  </div>
+  <div id="waiting-room">
+    <h2 id="waiting-status">Waiting for opponent...</h2>
+    <button id="waiting-exit">Exit</button>
+  </div>
+  <div id="game-container">
+    <div id="game-header">
+      <div id="status">Waiting...</div>
+      <div id="timer"></div>
+    </div>
+    <canvas id="game-canvas" width="500" height="500"></canvas>
+    <button id="in-game-exit">Exit</button>
+    <div id="match-started">Match started!</div>
+  </div>
+  <div id="game-over">
+    <h2 id="game-over-status"></h2>
+    <p id="sequence-length"></p>
+    <button id="play-again">Play Again</button>
+    <button id="exit">Exit</button>
+  </div>
+  <div id="rematch-waiting">
+    <h2>Waiting for opponent to accept rematch...</h2>
+  </div>
+  <div id="how-to-play-popup">
+    <h3>How To Play Memro</h3>
+    <button id="close-how-to-play">X</button>
+    <p><strong>Objective:</strong> Test your memory against your opponent by remembering the sequence!</p>
+    <p><strong>Gameplay:</strong></p>
+    <ul>
+      <li>Two players take turns pressing tiles on a 3x3 grid, each with a unique color and sound.</li>
+      <li>Each turn, repeat the current sequence of tiles in order, then add one new tile of your choice.</li>
+      <li>Example: If the current sequence is [Red, Blue], you tap Red, Blue, then add Green. The new sequence is [Red, Blue, Green].</li>
+      <li>You have 10 seconds per tile to complete your turn.</li>
+      <li>The game ends if you tap the wrong tile or run out of time.</li>
+      <li>The <strong>Sequence Length</strong> at the end is your shared score!</li>
+    </ul>
+  </div>
+  <div id="rematch-popup">
+    <h2>Rematch?</h2>
+    <button id="accept-rematch">Accept</button>
+    <button id="decline-rematch">Decline</button>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

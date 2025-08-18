@@ -5,6 +5,7 @@ let lobby, waitingRoom, gameContainer, gameNameInput, createGameBtn, howToPlayBt
     howToPlayPopup, closeHowToPlayBtn, openGamesList, gameOverDiv, gameOverStatus,
     sequenceLengthText, playAgainBtn, exitBtn, rematchWaiting, matchStarted, statusText, timerText,
     rematchPopup, acceptRematchBtn, declineRematchBtn, inGameExitBtn, waitingExitBtn;
+let isBoardLocked = false; // Add flag to lock board during tap animation
 
 function initDOM() {
   lobby = document.getElementById('lobby');
@@ -78,19 +79,32 @@ function drawCanvas() {
   });
 }
 
+function grayOutBoard() {
+  ctx.fillStyle = 'rgba(128, 128, 128, 0.5)'; // Semi-transparent gray overlay
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function clearGrayOut() {
+  drawCanvas(); // Redraw the board to clear the overlay
+}
+
 function highlightSquare(index) {
   const square = squares[index];
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(square.x, square.y, square.width, square.height);
-  setTimeout(() => drawCanvas(), 500);
+  setTimeout(() => {
+    if (!isBoardLocked) drawCanvas(); // Only redraw if not locked
+  }, 500);
 }
 
 function handleClick(event) {
   event.preventDefault();
-  if (!myTurn || gameOver) {
-    console.log(`Click ignored: myTurn=${myTurn}, gameOver=${gameOver}`);
+  if (!myTurn || gameOver || isBoardLocked) {
+    console.log(`Click ignored: myTurn=${myTurn}, gameOver=${gameOver}, isBoardLocked=${isBoardLocked}`);
     return;
   }
+  isBoardLocked = true; // Lock the board
+  grayOutBoard(); // Apply grayed-out effect
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -107,8 +121,14 @@ function handleClick(event) {
     tapCount++;
     highlightSquare(square.index);
     if (tones[square.index]) tones[square.index].play().catch(e => console.error('Audio play error:', e));
+    setTimeout(() => {
+      isBoardLocked = false;
+      clearGrayOut();
+    }, 500); // Unlock and clear after 0.5 seconds
   } else {
     console.log(`No square detected for canvas coordinates: x=${canvasX.toFixed(2)}, y=${canvasY.toFixed(2)}`);
+    isBoardLocked = false;
+    clearGrayOut(); // Unlock and clear if no valid tap
   }
 }
 
@@ -136,6 +156,7 @@ function cleanupGame() {
   tapCount = 0;
   roomId = null;
   playerId = null;
+  isBoardLocked = false; // Reset lock
   canvas.style.display = 'none';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.removeEventListener('click', handleClick);
@@ -218,11 +239,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('tap', (data) => {
     console.log(`Received tap: squareId=${data.squareId}`);
+    isBoardLocked = true; // Lock the board
+    grayOutBoard(); // Apply grayed-out effect
     highlightSquare(data.squareId);
     if (tones[data.squareId]) {
       console.log(`Playing tone for squareId=${data.squareId}`);
       tones[data.squareId].play().catch(e => console.error('Audio play error:', e));
     }
+    setTimeout(() => {
+      isBoardLocked = false;
+      clearGrayOut();
+    }, 500); // Unlock and clear after 0.5 seconds
   });
 
   socket.on('turn', (data) => {

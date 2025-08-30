@@ -273,7 +273,7 @@ function cleanupGame() {
 document.addEventListener('DOMContentLoaded', () => {
   if (!initDOM()) return;
   resetUI();
-  socket = io('http://localhost:3000', { reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000 });
+  socket = io('https://memro.onrender.com/', { reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000 });
 
   socket.on('connect', () => {
     console.log(`Connected: ${socket.id}`);

@@ -4,8 +4,11 @@ const tones = Array(9).fill().map((_, i) => new Audio(`/audio/tone${i}.wav`));
 let lobby, waitingRoom, gameContainer, gameNameInput, createGameBtn, howToPlayBtn,
     howToPlayPopup, closeHowToPlayBtn, openGamesList, gameOverDiv, gameOverStatus,
     sequenceLengthText, playAgainBtn, exitBtn, rematchWaiting, matchStarted, statusText, timerText,
-    rematchPopup, acceptRematchBtn, declineRematchBtn, inGameExitBtn, waitingExitBtn;
-let isBoardLocked = false; // Add flag to lock board during tap animation
+    rematchPopup, acceptRematchBtn, declineRematchBtn, inGameExitBtn, waitingExitBtn, singlePlayerBtn;
+let isBoardLocked = false;
+let isSinglePlayer = false;
+let computerSequence = [];
+let playerSequence = [];
 
 function initDOM() {
   lobby = document.getElementById('lobby');
@@ -29,12 +32,13 @@ function initDOM() {
   declineRematchBtn = document.getElementById('decline-rematch');
   inGameExitBtn = document.getElementById('in-game-exit');
   waitingExitBtn = document.getElementById('waiting-exit');
+  singlePlayerBtn = document.getElementById('single-player');
   statusText = document.getElementById('status');
   timerText = document.getElementById('timer');
   canvas = document.getElementById('game-canvas');
   ctx = canvas ? canvas.getContext('2d', { willReadFrequently: true }) : null;
 
-  if (!canvas || !ctx || !createGameBtn || !statusText || !timerText || !inGameExitBtn || !waitingExitBtn) {
+  if (!canvas || !ctx || !createGameBtn || !statusText || !timerText || !inGameExitBtn || !waitingExitBtn || !singlePlayerBtn) {
     console.error('Missing critical DOM elements:', {
       canvas: !!canvas,
       ctx: !!ctx,
@@ -42,7 +46,8 @@ function initDOM() {
       statusText: !!statusText,
       timerText: !!timerText,
       inGameExitBtn: !!inGameExitBtn,
-      waitingExitBtn: !!waitingExitBtn
+      waitingExitBtn: !!waitingExitBtn,
+      singlePlayerBtn: !!singlePlayerBtn
     });
     alert('Game initialization failed');
     return false;
@@ -55,8 +60,8 @@ function initCanvas() {
   canvas.height = 500;
   canvas.style.display = 'block';
   squares = [];
-  const gridSize = 500 / 3; // ~166.67px
-  const padding = 5; // 5px padding for hit detection
+  const gridSize = 500 / 3;
+  const padding = 5;
   for (let row = 0; row < 3; row++) {
     for (let col = 0; col < 3; col++) {
       const i = row * 3 + col;
@@ -80,12 +85,12 @@ function drawCanvas() {
 }
 
 function grayOutBoard() {
-  ctx.fillStyle = 'rgba(128, 128, 128, 0.5)'; // Semi-transparent gray overlay
+  ctx.fillStyle = 'rgba(128, 128, 128, 0.5)';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
 
 function clearGrayOut() {
-  drawCanvas(); // Redraw the board to clear the overlay
+  drawCanvas();
 }
 
 function highlightSquare(index) {
@@ -93,7 +98,7 @@ function highlightSquare(index) {
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(square.x, square.y, square.width, square.height);
   setTimeout(() => {
-    if (!isBoardLocked) drawCanvas(); // Only redraw if not locked
+    drawCanvas(); // Always redraw to ensure highlights clear
   }, 500);
 }
 
@@ -103,8 +108,8 @@ function handleClick(event) {
     console.log(`Click ignored: myTurn=${myTurn}, gameOver=${gameOver}, isBoardLocked=${isBoardLocked}`);
     return;
   }
-  isBoardLocked = true; // Lock the board
-  grayOutBoard(); // Apply grayed-out effect
+  isBoardLocked = true;
+  if (!isSinglePlayer) grayOutBoard(); // Only gray out in multiplayer
   const rect = canvas.getBoundingClientRect();
   const scaleX = canvas.width / rect.width;
   const scaleY = canvas.height / rect.height;
@@ -116,20 +121,119 @@ function handleClick(event) {
   const square = squares.find(s => canvasX >= s.x && canvasX <= s.x + s.width && canvasY >= s.y && canvasY <= s.y + s.height);
   if (square) {
     console.log(`Detected tap on square ${square.index}: x=${square.x}-${square.x + square.width}, y=${square.y}-${square.y + square.height}`);
-    socket.emit('tap', { squareId: square.index, roomId });
-    lastTapTime = Date.now();
-    tapCount++;
-    highlightSquare(square.index);
-    if (tones[square.index]) tones[square.index].play().catch(e => console.error('Audio play error:', e));
-    setTimeout(() => {
-      isBoardLocked = false;
-      clearGrayOut();
-    }, 500); // Unlock and clear after 0.5 seconds
+    handleTap(square.index);
   } else {
     console.log(`No square detected for canvas coordinates: x=${canvasX.toFixed(2)}, y=${canvasY.toFixed(2)}`);
     isBoardLocked = false;
-    clearGrayOut(); // Unlock and clear if no valid tap
+    if (!isSinglePlayer) clearGrayOut();
   }
+}
+
+function handleTap(squareId) {
+  if (isSinglePlayer) {
+    playerSequence.push(squareId);
+    lastTapTime = Date.now();
+    tapCount++;
+    highlightSquare(squareId);
+    if (tones[squareId]) tones[squareId].play().catch(e => console.error('Audio play error:', e));
+    // Validate sequence
+    if (playerSequence.length <= computerSequence.length) {
+      if (playerSequence[playerSequence.length - 1] !== computerSequence[playerSequence.length - 1]) {
+        console.log(`Incorrect tap: expected ${computerSequence[playerSequence.length - 1]}, got ${squareId}`);
+        endSinglePlayerGame();
+        return;
+      }
+      if (playerSequence.length === computerSequence.length) {
+        console.log('Correctly repeated sequence');
+      }
+    }
+    if (playerSequence.length === computerSequence.length + 1) {
+      computerSequence.push(squareId);
+      playerSequence = [];
+      myTurn = false;
+      statusText.textContent = "Computer's Turn";
+      setTimeout(computerTurn, 1000);
+    } else {
+      isBoardLocked = false;
+    }
+  } else {
+    socket.emit('tap', { squareId, roomId });
+    lastTapTime = Date.now();
+    tapCount++;
+    highlightSquare(squareId);
+    if (tones[squareId]) tones[squareId].play().catch(e => console.error('Audio play error:', e));
+    setTimeout(() => {
+      isBoardLocked = false;
+      clearGrayOut();
+    }, 500);
+  }
+}
+
+function computerTurn() {
+  let i = 0;
+  function playNext() {
+    if (i < computerSequence.length) {
+      const squareId = computerSequence[i];
+      highlightSquare(squareId);
+      if (tones[squareId]) tones[squareId].play().catch(e => console.error('Audio play error:', e));
+      i++;
+      setTimeout(playNext, 1000);
+    } else {
+      // Computer adds a random square
+      const randomSquare = Math.floor(Math.random() * 9);
+      computerSequence.push(randomSquare);
+      highlightSquare(randomSquare);
+      if (tones[randomSquare]) tones[randomSquare].play().catch(e => console.error('Audio play error:', e));
+      setTimeout(() => {
+        myTurn = true;
+        statusText.textContent = 'Your Turn';
+        lastTapTime = Date.now();
+        tapCount = 0;
+        playerSequence = [];
+        isBoardLocked = false;
+      }, 500);
+    }
+  }
+  playNext();
+}
+
+function endSinglePlayerGame() {
+  gameOver = true;
+  gameState = 'ended';
+  const score = computerSequence.length;
+  const highScore = parseInt(localStorage.getItem('memroHighScore') || '0', 10);
+  if (score > highScore) {
+    localStorage.setItem('memroHighScore', score);
+  }
+  statusText.textContent = 'Game Over';
+  gameOverStatus.textContent = 'Game Over';
+  sequenceLengthText.textContent = `Score: ${score} | High Score: ${Math.max(score, highScore)}`;
+  gameOverDiv.style.display = 'block';
+  playAgainBtn.textContent = 'Play Again';
+  rematchPopup.style.display = 'none';
+}
+
+function startSinglePlayerGame() {
+  cleanupGame();
+  isSinglePlayer = true;
+  gameState = 'playing';
+  myTurn = true;
+  gameOver = false;
+  lastTapTime = Date.now();
+  tapCount = 0;
+  computerSequence = [];
+  playerSequence = [];
+  lobby.style.display = 'none';
+  waitingRoom.style.display = 'none';
+  gameContainer.style.display = 'block';
+  canvas.style.display = 'block';
+  statusText.textContent = 'Your Turn';
+  timerText.textContent = 'Time: 10';
+  gameOverDiv.style.display = 'none';
+  rematchPopup.style.display = 'none';
+  initCanvas();
+  matchStarted.style.display = 'block';
+  setTimeout(() => { matchStarted.style.display = 'none'; }, 1000);
 }
 
 function resetUI() {
@@ -156,7 +260,10 @@ function cleanupGame() {
   tapCount = 0;
   roomId = null;
   playerId = null;
-  isBoardLocked = false; // Reset lock
+  isBoardLocked = false;
+  isSinglePlayer = false;
+  computerSequence = [];
+  playerSequence = [];
   canvas.style.display = 'none';
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   canvas.removeEventListener('click', handleClick);
@@ -166,7 +273,7 @@ function cleanupGame() {
 document.addEventListener('DOMContentLoaded', () => {
   if (!initDOM()) return;
   resetUI();
-  socket = io('https://memro.onrender.com', { reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000 });
+  socket = io('http://localhost:3000', { reconnection: true, reconnectionAttempts: 5, reconnectionDelay: 1000 });
 
   socket.on('connect', () => {
     console.log(`Connected: ${socket.id}`);
@@ -231,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
     rematchPopup.style.display = 'none';
     matchStarted.style.display = 'block';
     canvas.style.display = 'block';
-    statusText.textContent = myTurn ? 'Your Turn' : 'Opponent\'s Turn';
+    statusText.textContent = myTurn ? 'Your Turn' : "Opponent's Turn";
     gameState = 'playing';
     initCanvas();
     setTimeout(() => matchStarted.style.display = 'none', 1000);
@@ -239,8 +346,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   socket.on('tap', (data) => {
     console.log(`Received tap: squareId=${data.squareId}`);
-    isBoardLocked = true; // Lock the board
-    grayOutBoard(); // Apply grayed-out effect
+    isBoardLocked = true;
+    grayOutBoard();
     highlightSquare(data.squareId);
     if (tones[data.squareId]) {
       console.log(`Playing tone for squareId=${data.squareId}`);
@@ -249,13 +356,13 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
       isBoardLocked = false;
       clearGrayOut();
-    }, 500); // Unlock and clear after 0.5 seconds
+    }, 500);
   });
 
   socket.on('turn', (data) => {
     myTurn = data.currentPlayer === playerId;
     console.log(`Turn update: currentPlayer=${data.currentPlayer}, myTurn=${myTurn}, playerId=${playerId}`);
-    statusText.textContent = myTurn ? 'Your Turn' : 'Opponent\'s Turn';
+    statusText.textContent = myTurn ? 'Your Turn' : "Opponent's Turn";
     lastTapTime = Date.now();
     tapCount = 0;
   });
@@ -336,19 +443,30 @@ document.addEventListener('DOMContentLoaded', () => {
     gameNameInput.value = '';
   });
 
+  singlePlayerBtn.addEventListener('click', startSinglePlayerGame);
+
   howToPlayBtn.addEventListener('click', () => howToPlayPopup.style.display = 'block');
   closeHowToPlayBtn.addEventListener('click', () => howToPlayPopup.style.display = 'none');
 
   playAgainBtn.addEventListener('click', () => {
-    socket.emit('rematch_request', { roomId });
-    gameOverDiv.style.display = 'none';
-    rematchWaiting.style.display = 'block';
+    if (isSinglePlayer) {
+      startSinglePlayerGame();
+    } else {
+      socket.emit('rematch_request', { roomId });
+      gameOverDiv.style.display = 'none';
+      rematchWaiting.style.display = 'block';
+    }
   });
 
   exitBtn.addEventListener('click', () => {
-    socket.emit('exit_game', { roomId });
-    resetUI();
-    cleanupGame();
+    if (isSinglePlayer) {
+      resetUI();
+      cleanupGame();
+    } else {
+      socket.emit('exit_game', { roomId });
+      resetUI();
+      cleanupGame();
+    }
   });
 
   acceptRematchBtn.addEventListener('click', () => {
@@ -366,9 +484,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   inGameExitBtn.addEventListener('click', () => {
-    socket.emit('exit_game', { roomId });
-    resetUI();
-    cleanupGame();
+    if (isSinglePlayer) {
+      resetUI();
+      cleanupGame();
+    } else {
+      socket.emit('exit_game', { roomId });
+      resetUI();
+      cleanupGame();
+    }
   });
 
   waitingExitBtn.addEventListener('click', () => {
@@ -383,7 +506,11 @@ document.addEventListener('DOMContentLoaded', () => {
       timerText.textContent = `Time: ${Math.max(0, Math.floor(remaining))}`;
       if (remaining <= 0) {
         console.log('Client detected timeout');
-        socket.emit('timeout', { roomId });
+        if (isSinglePlayer) {
+          endSinglePlayerGame();
+        } else {
+          socket.emit('timeout', { roomId });
+        }
       }
     } else {
       timerText.textContent = '';

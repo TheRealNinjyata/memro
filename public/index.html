@@ -34,7 +34,7 @@
     }
     #game-container {
       position: relative;
-      min-height: calc(80vh + 90px); /* Canvas (80vh) + header (60px) + button gap (30px) */
+      min-height: 600px; /* Reduced from 620px to match original */
     }
     #waiting-room {
       display: flex;
@@ -72,8 +72,9 @@
       width: 100%;
       max-width: 300px;
       letter-spacing: 1px;
+      font-family: 'VT323', monospace;
     }
-    #create-game, #how-to-play {
+    #create-game, #how-to-play, #single-player {
       padding: 10px 20px;
       font-size: 18px;
       background: #ff00ff;
@@ -84,18 +85,38 @@
       width: 100%;
       max-width: 300px;
       letter-spacing: 1px;
+      font-family: 'VT323', monospace;
     }
-    #create-game:hover, #how-to-play:hover { background: #cc00cc; }
+    #create-game:hover, #how-to-play:hover, #single-player:hover { background: #cc00cc; }
     #open-games {
       list-style: none;
       padding: 0;
-      margin-top: 20px;
+      margin: 20px auto 0; /* Centered with auto margins */
+      max-width: 300px; /* Match input/button width for alignment */
+      max-height: 200px;
+      overflow-y: scroll;
+      scrollbar-width: thin;
+      scrollbar-color: #00ffcc #1a1a1a;
+    }
+    #open-games::-webkit-scrollbar {
+      width: 8px;
+    }
+    #open-games::-webkit-scrollbar-track {
+      background: #1a1a1a;
+    }
+    #open-games::-webkit-scrollbar-thumb {
+      background: #00ffcc;
+      border-radius: 4px;
     }
     #open-games li {
       margin: 10px 0;
       color: #00ffcc;
       text-shadow: 0 0 5px #00ffcc;
       letter-spacing: 1px;
+      display: flex;
+      justify-content: center; /* Center game name and button */
+      align-items: center;
+      gap: 10px; /* Space between game name and Join button */
     }
     #open-games button {
       padding: 5px 10px;
@@ -105,6 +126,7 @@
       cursor: pointer;
       box-shadow: 0 0 10px #00ffcc;
       letter-spacing: 1px;
+      font-family: 'VT323', monospace;
     }
     #open-games button:hover { background: #00cc99; }
     #status {
@@ -130,17 +152,12 @@
       text-shadow: 0 0 5px #ff00ff;
       font-family: 'VT323', monospace;
       letter-spacing: 1px;
+      margin-top: 20px; /* Added from original for spacing below canvas */
     }
     #in-game-exit:hover, #waiting-exit:hover {
       background: #ff00ff;
       color: #000;
       text-shadow: none;
-    }
-    #in-game-exit {
-      position: absolute;
-      bottom: 4vw; /* Dynamic gap for desktop, ~20-40px on typical screens */
-      left: 50%;
-      transform: translateX(-50%);
     }
     #waiting-status {
       color: #00ffcc;
@@ -180,6 +197,7 @@
       box-shadow: 0 0 10px #00ffcc;
       margin: 10px;
       letter-spacing: 1px;
+      font-family: 'VT323', monospace;
     }
     #game-over button:hover { background: #00cc99; }
     #rematch-waiting {
@@ -257,10 +275,7 @@
       text-shadow: 0 0 5px #ff00ff;
       letter-spacing: 1px;
     }
-    #close-how-to-play:hover {
-      color: #cc00cc;
-      text-shadow: 0 0 5px #cc00cc;
-    }
+    #close-how-to-play:hover { color: #cc00cc; text-shadow: 0 0 5px #cc00cc; }
     #rematch-popup {
       display: none;
       position: fixed;
@@ -288,22 +303,19 @@
       box-shadow: 0 0 10px #00ffcc;
       margin: 10px;
       letter-spacing: 1px;
+      font-family: 'VT323', monospace;
     }
     #rematch-popup button:hover { background: #00cc99; }
     @media (max-width: 500px) {
       h2 { font-size: 24px; }
-      #game-name, #create-game, #how-to-play, #open-games button { font-size: 14px; padding: 8px; }
+      #game-name, #create-game, #how-to-play, #single-player, #open-games button { font-size: 14px; padding: 8px; }
       #status { font-size: 28px; }
       #timer { font-size: 14px; }
       #match-started { font-size: 20px; }
       #how-to-play-popup { font-size: 14px; padding: 15px; }
       #game-canvas { max-height: 70vh; }
-      #in-game-exit, #waiting-exit { font-size: 20px; padding: 10px 20px; }
-      #in-game-exit { bottom: 10px; } /* Mobile: 10px gap */
-      #game-container { min-height: calc(70vh + 80px); } /* Adjusted for mobile */
-    }
-    @media (min-width: 501px) {
-      #in-game-exit { bottom: 4vw; } /* Ensure dynamic gap for desktop */
+      #in-game-exit, #waiting-exit { font-size: 20px; padding: 10px 20px; margin-top: 10px; }
+      #game-container { min-height: 500px; } /* Reduced from 550px to match original */
     }
   </style>
 </head>
@@ -314,6 +326,7 @@
       <button id="how-to-play">How To Play</button>
       <input id="game-name" type="text" placeholder="Enter game name">
       <button id="create-game">Create Game</button>
+      <button id="single-player">Single Player</button>
     </div>
     <h2>Open Games</h2>
     <ul id="open-games"></ul>
@@ -343,15 +356,15 @@
   <div id="how-to-play-popup">
     <h3>How To Play Memro</h3>
     <button id="close-how-to-play">X</button>
-    <p><strong>Objective:</strong> Test your memory against your opponent by remembering the sequence!</p>
+    <p><strong>Objective:</strong> Test your memory against your opponent or a computer by remembering the sequence!</p>
     <p><strong>Gameplay:</strong></p>
     <ul>
-      <li>Two players take turns pressing tiles on a 3x3 grid, each with a unique color and sound.</li>
+      <li>In Multiplayer, two players take turns; in Single Player, you play against a computer.</li>
       <li>Each turn, repeat the current sequence of tiles in order, then add one new tile of your choice.</li>
-      <li>Example: If the current sequence is [Red, Blue], you tap Red, Blue, then add Green. The new sequence is [Red, Blue, Green].</li>
+      <li>Example: If the sequence is [Red, Blue], tap Red, Blue, then add Green. New sequence: [Red, Blue, Green].</li>
       <li>You have 10 seconds per tile to complete your turn.</li>
       <li>The game ends if you tap the wrong tile or run out of time.</li>
-      <li>The <strong>Sequence Length</strong> at the end is your shared score!</li>
+      <li><strong>Score:</strong> Sequence length at the end. In Single Player, beat your high score!</li>
     </ul>
   </div>
   <div id="rematch-popup">
